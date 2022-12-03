@@ -1,0 +1,60 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+missing_plugins = %w'vagrant-triggers'.reject { |p| Vagrant.has_plugin?(p) }
+unless missing_plugins.empty?
+  system "vagrant plugin install #{missing_plugins.join(' ')}"
+  puts "Installed new Vagrant plugins. Please run command again"
+  exit 1
+end
+
+# Environment variables needed to register the RHEL box. These will need to be exported prior to running
+user = ENV['RH_SUBSCRIPTION_MANAGER_USER']
+password = ENV['RH_SUBSCRIPTION_MANAGER_PW']
+
+## Checking for RH password and username for subscription
+if !user or !password
+  puts 'Environment varibale are missing. Please set RH_SUBSCRIPTION_MANAGER_USER and RH_SUBSCRIPTION_MANAGER_PW'
+  abort
+end
+
+# defining the register script
+register_script = %{
+if ! subscription-manager status; then
+  sudo subscription-manager register --username=#{user} --password=#{password} --auto-attach
+fi
+}
+
+# defining the unregister script
+unregister_script = %{
+if subscription-manager status; then
+  sudo subscription-manager unregister
+fi
+}
+
+# defining the artifactory installer script (internet access currently needed for the file pulls)
+artsetup_script = %{
+  }
+}
+
+
+VAGRANTFILE_API_VERSION = "2"
+VM_PROVIDER = "vmware_desktop" #here so we don't have to specify in the command line (vagrant up --provider vmware_workstation)
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.define "rhel8" do |rhel8|
+    rhel8.vm.box ="generic/rhel8"
+    config.vm.provider(VM_PROVIDER)
+    config.vm.network "forwarded_port", guest: 8082, host: 8082
+end #vbox provider
+
+  config.vm.provision "shell", inline: register_script
+
+  config.trigger.before :destroy do |trigger|
+    trigger.name = "Before Destroy trigger"
+    trigger.info = "Unregistering this VM from RedHat Subscription Manager..."
+    trigger.warn = "If this fails, unregister VMs manually at https://access.redhat.com/management/subscriptions"
+    trigger.run_remote = {inline: unregister_script}
+    trigger.on_error = :continue
+  end # trigger.before :destroy
+end # vagrant configure
