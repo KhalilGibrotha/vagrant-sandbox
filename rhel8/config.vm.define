@@ -1,0 +1,44 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Environment variables needed to register the RHEL box. These will need to be exported prior to running
+user = ENV['RH_SUBSCRIPTION_MANAGER_USER']
+password = ENV['RH_SUBSCRIPTION_MANAGER_PW']
+
+## Checking for RH password and username for subscription
+if !user or !password
+  puts 'Environment varibale are missing. Please set RH_SUBSCRIPTION_MANAGER_USER and RH_SUBSCRIPTION_MANAGER_PW'
+  abort
+end
+
+# defining the register script
+register_script = %{
+if ! subscription-manager status; then
+  sudo subscription-manager register --username=#{user} --password=#{password} --auto-attach
+fi
+}
+
+# defining the unregister script
+unregister_script = %{
+if subscription-manager status; then
+  sudo subscription-manager unregister
+fi
+}
+
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.define "rhel8" do |rhel8|
+    rhel8.vm.box ="generic/rhel8"
+end #vbox provider
+
+  config.vm.provision "shell", inline: register_script
+
+  config.trigger.before :destroy do |trigger|
+    trigger.name = "Before Destroy trigger"
+    trigger.info = "Unregistering this VM from RedHat Subscription Manager..."
+    trigger.warn = "If this fails, unregister VMs manually at https://access.redhat.com/management/subscriptions"
+    trigger.run_remote = {inline: unregister_script}
+    trigger.on_error = :continue
+  end # trigger.before :destroy
+end # vagrant configure
