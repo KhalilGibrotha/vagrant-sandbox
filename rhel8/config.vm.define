@@ -1,6 +1,15 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# checking for missing missing_plugins
+
+missing_plugins = %w'vagrant-triggers'.reject { |p| Vagrant.has_plugin?(p) }
+unless missing_plugins.empty?
+  system "vagrant plugin install #{missing_plugins.join(' ')}"
+  puts "Installed new Vagrant plugins. Please run command again"
+  exit 1
+end
+
 # Environment variables needed to register the RHEL box. These will need to be exported prior to running
 user = ENV['RH_SUBSCRIPTION_MANAGER_USER']
 password = ENV['RH_SUBSCRIPTION_MANAGER_PW']
@@ -26,10 +35,13 @@ fi
 }
 
 VAGRANTFILE_API_VERSION = "2"
+VM_PROVIDER = "vmware_desktop" #here so we don't have to specify in the command line (vagrant up --provider vmware_workstation)
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.define "rhel8" do |rhel8|
     rhel8.vm.box ="generic/rhel8"
+    config.vm.provider(VM_PROVIDER)
+    config.vm.network "forwarded_port", guest: 22, host: 2222
 end #vbox provider
 
   config.vm.provision "shell", inline: register_script
